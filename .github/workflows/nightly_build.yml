@@ -41,8 +41,11 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
+      - name: List built APK files
+        run: ls -la app/build/outputs/apk/release/
+
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release-signed.apk EasyNotes-nightly.apk
+        run: mv app/build/outputs/apk/release/app-release.apk EasyNotes-nightly.apk
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4.6.2
