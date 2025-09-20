@@ -39,7 +39,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleDefaultRelease
+        run: ./gradlew assembleDefaultRelease --trace-deprecation
 
       - name: Check built APK files
         run: |
