@@ -39,7 +39,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleDefaultRelease --info
+        run: ./gradlew assembleDefaultRelease
 
       - name: Check built APK files
         run: |
@@ -74,10 +74,3 @@ jobs:
         with:
           name: EasyNotes-Nightly
           path: EasyNotes-nightly.apk
-
-      - name: Update nightly release
-        uses: pyTooling/Actions/releaser@main
-        with:
-          tag: Nightly
-          token: ${{ secrets.TOKEN }}
-          files: EasyNotes-nightly.apk
