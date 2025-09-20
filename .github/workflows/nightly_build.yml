@@ -39,13 +39,35 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDefaultRelease --info
 
-      - name: List built APK files
-        run: ls -la app/build/outputs/apk/release/
+      - name: Check built APK files
+        run: |
+          echo "Listing APK directory structure..."
+          ls -la app/build/outputs/apk/ || echo "APK directory not found"
+          echo "Listing default release directory..."
+          ls -la app/build/outputs/apk/default/release/ || echo "Default release directory not found"
+          echo "Finding all APK files..."
+          find app/build -name "*.apk" -type f || echo "No APK files found"
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release.apk EasyNotes-nightly.apk
+        run: |
+          # Look for the default flavor release APK
+          if [ -f "app/build/outputs/apk/default/release/app-default-release.apk" ]; then
+            mv app/build/outputs/apk/default/release/app-default-release.apk EasyNotes-nightly.apk
+            echo "APK renamed to EasyNotes-nightly.apk"
+          else
+            echo "Expected APK file not found, searching for any APK..."
+            APK_FILE=$(find app/build -name "*.apk" -type f | head -1)
+            if [ -n "$APK_FILE" ]; then
+              echo "Found APK: $APK_FILE"
+              mv "$APK_FILE" EasyNotes-nightly.apk
+              echo "APK renamed to EasyNotes-nightly.apk"
+            else
+              echo "No APK file found!"
+              exit 1
+            fi
+          fi
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4.6.2
