@@ -31,13 +31,35 @@ android {
         targetSdk = 34
         versionCode = 11
         versionName = "1.4"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
+        vectorDrawables { useSupportLibrary = true }
 
         // https://developer.android.com/guide/topics/resources/app-languages#gradle-config
         resourceConfigurations.plus(
-            listOf("en", "ar", "de", "es", "fa", "fil", "fr", "hi", "it", "ja", "ru", "sk", "tr", "da", "nl", "pl", "tr", "uk", "vi", "ota", "pt-rBR", "sr", "zh-rCN")
+                listOf(
+                        "en",
+                        "ar",
+                        "de",
+                        "es",
+                        "fa",
+                        "fil",
+                        "fr",
+                        "hi",
+                        "it",
+                        "ja",
+                        "ru",
+                        "sk",
+                        "tr",
+                        "da",
+                        "nl",
+                        "pl",
+                        "tr",
+                        "uk",
+                        "vi",
+                        "ota",
+                        "pt-rBR",
+                        "sr",
+                        "zh-rCN"
+                )
         )
     }
 
@@ -47,8 +69,8 @@ android {
             isShrinkResources = true
 
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -56,8 +78,8 @@ android {
         debug {
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = true
@@ -65,21 +87,15 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "25" }
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
+    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
     buildToolsVersion = "34.0.0"
 }
 
@@ -104,3 +120,4 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.navigation.compose)
 }
+
