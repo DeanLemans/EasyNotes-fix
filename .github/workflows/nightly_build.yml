@@ -42,7 +42,7 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release-unsigned.apk EasyNotes-nightly.apk
+        run: mv app/build/outputs/apk/release/app-release-signed.apk EasyNotes-nightly.apk
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4.6.2
