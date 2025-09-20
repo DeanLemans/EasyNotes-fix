@@ -363,7 +363,8 @@ fun OnRadiusClicked(settingsViewModel: SettingsViewModel, onExit: (Int) -> Unit)
                                         shape = RoundedCornerShape(realRadius / 3)
                                 )
                                 .fillMaxWidth()
-                                .fillMaxSize(0.38f)
+                                .wrapContentHeight()
+                                .padding(bottom = 16.dp)
         ) {
             Text(
                     text = stringResource(id = R.string.select_radius),
