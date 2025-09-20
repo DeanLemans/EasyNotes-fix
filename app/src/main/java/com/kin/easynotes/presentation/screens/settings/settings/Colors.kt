@@ -356,7 +356,7 @@ fun OnRadiusClicked(settingsViewModel: SettingsViewModel, onExit: (Int) -> Unit)
                                 .height(62.dp),
         )
     }
-    Dialog(onDismissRequest = { onExit(settingsRadius) }) {
+    Dialog(onDismissRequest = { onExit(realRadius) }) {
         Column(
                 modifier =
                         Modifier.background(
