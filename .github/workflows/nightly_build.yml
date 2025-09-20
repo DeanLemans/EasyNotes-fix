@@ -7,9 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       commit:
-        description: 'Commit hash to build'
+        description: "Commit hash to build"
         required: false
-        default: 'dd326c7564c7a50ebae7b6fed73b3a1682a9f145'
         type: string
 
 concurrency:
@@ -33,7 +32,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: 'adopt'
+          distribution: "adopt"
           cache: gradle
 
       - name: Grant execution permission to Gradle Wrapper
@@ -42,20 +41,8 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
-      - name: Sign app APK
-        uses: r0adkll/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.KEY_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASS }}
-          keyPassword: ${{ secrets.KEYSTORE_PASS }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
-
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release-signed.apk EasyNotes-nightly.apk
+        run: mv app/build/outputs/apk/release/app-release-unsigned.apk EasyNotes-nightly.apk
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4.6.0
@@ -66,6 +53,6 @@ jobs:
       - name: Update nightly release
         uses: eine/tip@master
         with:
-         tag: Nightly
-         token: ${{ secrets.TOKEN }}
-         files: EasyNotes-nightly.apk
+          tag: Nightly
+          token: ${{ secrets.TOKEN }}
+          files: EasyNotes-nightly.apk
