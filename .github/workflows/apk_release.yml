@@ -1,0 +1,209 @@
+name: APK Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force create release even if build fails'
+        required: false
+        default: true
+        type: boolean
+      release_tag:
+        description: 'Custom release tag (default: auto-generated)'
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Grant execution permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Generate release tag
+        id: generate_tag
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            # Generate timestamp-based tag
+            TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+            COMMIT_SHORT=$(git rev-parse --short HEAD)
+            TAG="nightly-${TIMESTAMP}-${COMMIT_SHORT}"
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          fi
+          echo "Generated tag: $(cat $GITHUB_OUTPUT | grep tag= | cut -d= -f2)"
+
+      - name: Try building default flavor APK
+        id: build_default
+        continue-on-error: true
+        run: |
+          echo "Attempting to build default flavor..."
+          ./gradlew assembleDefaultRelease --stacktrace
+          if [ -f "app/build/outputs/apk/default/release/app-default-release.apk" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "apk_path=app/build/outputs/apk/default/release/app-default-release.apk" >> $GITHUB_OUTPUT
+            echo "apk_name=EasyNotes-default-${{ steps.generate_tag.outputs.tag }}.apk" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Try building all release APKs (fallback)
+        id: build_all
+        if: steps.build_default.outputs.success != 'true'
+        continue-on-error: true
+        run: |
+          echo "Default build failed, trying all flavors..."
+          ./gradlew assembleRelease --stacktrace
+          APK_FILE=$(find app/build -name "*-release.apk" -type f | head -1)
+          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "apk_path=$APK_FILE" >> $GITHUB_OUTPUT
+            FLAVOR_NAME=$(basename "$APK_FILE" .apk | sed 's/app-//' | sed 's/-release//')
+            echo "apk_name=EasyNotes-${FLAVOR_NAME}-${{ steps.generate_tag.outputs.tag }}.apk" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Try building debug APK (emergency fallback)
+        id: build_debug
+        if: steps.build_default.outputs.success != 'true' && steps.build_all.outputs.success != 'true'
+        continue-on-error: true
+        run: |
+          echo "Release builds failed, trying debug build..."
+          ./gradlew assembleDebug --stacktrace
+          APK_FILE=$(find app/build -name "*-debug.apk" -type f | head -1)
+          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "apk_path=$APK_FILE" >> $GITHUB_OUTPUT
+            FLAVOR_NAME=$(basename "$APK_FILE" .apk | sed 's/app-//' | sed 's/-debug//')
+            echo "apk_name=EasyNotes-${FLAVOR_NAME}-debug-${{ steps.generate_tag.outputs.tag }}.apk" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine final APK
+        id: final_apk
+        run: |
+          if [ "${{ steps.build_default.outputs.success }}" = "true" ]; then
+            echo "apk_path=${{ steps.build_default.outputs.apk_path }}" >> $GITHUB_OUTPUT
+            echo "apk_name=${{ steps.build_default.outputs.apk_name }}" >> $GITHUB_OUTPUT
+            echo "build_status=✅ Default Release Build" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.build_all.outputs.success }}" = "true" ]; then
+            echo "apk_path=${{ steps.build_all.outputs.apk_path }}" >> $GITHUB_OUTPUT
+            echo "apk_name=${{ steps.build_all.outputs.apk_name }}" >> $GITHUB_OUTPUT
+            echo "build_status=⚠️ Fallback Release Build" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.build_debug.outputs.success }}" = "true" ]; then
+            echo "apk_path=${{ steps.build_debug.outputs.apk_path }}" >> $GITHUB_OUTPUT
+            echo "apk_name=${{ steps.build_debug.outputs.apk_name }}" >> $GITHUB_OUTPUT
+            echo "build_status=🚨 Emergency Debug Build" >> $GITHUB_OUTPUT
+          else
+            echo "build_status=❌ All Builds Failed" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.force_release }}" != "true" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+              echo "No APK built and force_release is false"
+              exit 1
+            fi
+          fi
+
+      - name: Show build results
+        run: |
+          echo "=== BUILD RESULTS ==="
+          echo "Status: ${{ steps.final_apk.outputs.build_status }}"
+          if [ -n "${{ steps.final_apk.outputs.apk_path }}" ]; then
+            echo "APK Path: ${{ steps.final_apk.outputs.apk_path }}"
+            echo "APK Name: ${{ steps.final_apk.outputs.apk_name }}"
+            echo "APK Size: $(du -h '${{ steps.final_apk.outputs.apk_path }}' | cut -f1)"
+            ls -la "${{ steps.final_apk.outputs.apk_path }}"
+          else
+            echo "No APK was successfully built"
+          fi
+          echo "===================="
+
+      - name: Copy APK to release name
+        if: steps.final_apk.outputs.apk_path != ''
+        run: |
+          cp "${{ steps.final_apk.outputs.apk_path }}" "${{ steps.final_apk.outputs.apk_name }}"
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.generate_tag.outputs.tag }}
+          name: "EasyNotes ${{ steps.generate_tag.outputs.tag }}"
+          body: |
+            ## EasyNotes Automated Release
+
+            **Build Status:** ${{ steps.final_apk.outputs.build_status }}
+            **Commit:** ${{ github.sha }}
+            **Branch:** ${{ github.ref_name }}
+            **Trigger:** ${{ github.event_name }}
+
+            ### 📱 APK Information
+            ${{ steps.final_apk.outputs.apk_path != '' && format('- **File:** {0}', steps.final_apk.outputs.apk_name) || '- ❌ No APK available in this release' }}
+            ${{ steps.final_apk.outputs.apk_path != '' && '- **Status:** Ready to install' || '- **Status:** Build failed - check logs for details' }}
+
+            ### 🔍 Build Details
+            - **Java Version:** 17
+            - **Gradle Task:** ${{ steps.build_default.outputs.success == 'true' && 'assembleDefaultRelease' || steps.build_all.outputs.success == 'true' && 'assembleRelease' || steps.build_debug.outputs.success == 'true' && 'assembleDebug' || 'All builds failed' }}
+
+            ### 📝 Notes
+            ${{ steps.final_apk.outputs.build_status == '✅ Default Release Build' && 'This is a standard release build of the default flavor.' || '' }}
+            ${{ steps.final_apk.outputs.build_status == '⚠️ Fallback Release Build' && 'Built using fallback method - may be a different flavor than usual.' || '' }}
+            ${{ steps.final_apk.outputs.build_status == '🚨 Emergency Debug Build' && '⚠️ This is a DEBUG build! Performance may be reduced and debugging features are enabled.' || '' }}
+            ${{ steps.final_apk.outputs.build_status == '❌ All Builds Failed' && '❌ No APK could be built. Check the GitHub Actions logs for error details.' || '' }}
+
+            ---
+            *This release was automatically generated by GitHub Actions.*
+          files: ${{ steps.final_apk.outputs.apk_path != '' && steps.final_apk.outputs.apk_name || '' }}
+          draft: false
+          prerelease: ${{ steps.final_apk.outputs.build_status != '✅ Default Release Build' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact (backup)
+        if: steps.final_apk.outputs.apk_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.final_apk.outputs.apk_name }}
+          path: ${{ steps.final_apk.outputs.apk_name }}
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          echo "## 📱 EasyNotes APK Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Tag:** \`${{ steps.generate_tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.final_apk.outputs.build_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.create_release.outputs.url }}" ]; then
+            echo "**GitHub Release:** [${{ steps.generate_tag.outputs.tag }}](${{ steps.create_release.outputs.url }})" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.final_apk.outputs.apk_path }}" ]; then
+            echo "✅ **APK Available:** ${{ steps.final_apk.outputs.apk_name }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **No APK:** Build failed, but release was still created" >> $GITHUB_STEP_SUMMARY
+          fi
